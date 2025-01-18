@@ -2,6 +2,16 @@ version: '1.0'
 services:
   api:
     build: .
-    command: sh -c "uvicorn api.main:app --reload --port=5000 --host=0.0.0.0"
     ports:
-      - 5000:5000
+      - "5000:5000"
+    networks:
+      - my-network
+    command: sh -c "uvicorn api.main:app --reload --port=5000 --host=0.0.0.0"
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "12345:12345"
+    networks:
+      - my-network
+networks:
+  my-network:
