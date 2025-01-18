@@ -1,5 +1,7 @@
+version: '1.0'
 services:
-  api_edge:
+  api:
     build: .
+    command: sh -c "uvicorn api.main:app --reload --port=5000 --host=0.0.0.0"
     ports:
-     - "8000:80"
+      - 5000:5000
