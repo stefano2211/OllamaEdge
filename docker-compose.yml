@@ -1,0 +1,6 @@
+version: '1.0'
+services:
+  fast-api:
+    build: ./api
+    ports:
+     - "8000:80"
