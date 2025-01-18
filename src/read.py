@@ -1,8 +1,8 @@
 import requests
 import pandas as pd
+import os
 
-
-def json_to_csv(api_url, csv_filename):
+def json_to_csv(api_url, base_filename):
     # Realiza la solicitud a la API
     response = requests.get(api_url)
     
@@ -16,6 +16,15 @@ def json_to_csv(api_url, csv_filename):
         
         # Verifica que el DataFrame tenga las columnas esperadas
         if all(col in df.columns for col in ['id', 'temperature', 'timestamp']):
+            # Genera un nombre de archivo único
+            csv_filename = base_filename
+            counter = 1
+            
+            # Aumenta el nombre del archivo si ya existe
+            while os.path.exists(csv_filename):
+                csv_filename = f"{base_filename.rsplit('.', 1)[0]}_{counter}.csv"
+                counter += 1
+            
             # Guarda el DataFrame como un archivo CSV
             df.to_csv(csv_filename, index=False)
             print(f"Datos guardados en {csv_filename}")
@@ -24,7 +33,3 @@ def json_to_csv(api_url, csv_filename):
     else:
         print(f"Error al realizar la solicitud: {response.status_code}")
 
-# Ejemplo de uso
-url = 'https://magicloops.dev/api/loop/f35fe175-2e71-4fad-81be-7a6b3a9aa4dc/run'
-csv_filename = './data/magic_loops_data_1.csv'
-json_to_csv(url, csv_filename)

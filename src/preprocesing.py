@@ -18,14 +18,16 @@ def load_data():
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=500)
             docs = text_splitter.split_documents(data_csv)
             all_docs.extend(docs)  # Add the split documents to the list
-    return all_docs
+    return docs
 
-def crear_vectorstore(docs):
+def create_vectorstore():
+    docs = load_data()
     embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = Chroma.from_documents(
         documents=docs,
         embedding=embed_model,
-        persist_directory="chroma_db_dir",
+        persist_directory="./db/chroma_db_dir",
         collection_name="stanford_report_data"
     )
     return vectorstore
+
