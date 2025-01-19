@@ -53,6 +53,18 @@ Ollama run llama2:7b
 uvicorn api.main:app
 ```
 
+## Docker Install
+
+```bash
+docker build -t my-fastapi-app .
+```
+
+### Docker run
+
+```bash
+docker run -p 8000:8000 my-fastapi-app
+```
+
 ## Contributions
 
 Contributions are welcome. If you would like to contribute, please open an issue or a pull request.

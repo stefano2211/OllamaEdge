@@ -1,11 +1,31 @@
-FROM python:3.11
+FROM python:3.10-slim
 
-WORKDIR /api
+ENV DEBIAN_FRONTEND=noninteractive
 
-COPY requirements.txt requirements.txt
-COPY . /api
-RUN pip install -r requirements.txt
+RUN apt-get update && apt-get install -y \
+    curl \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY . .
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+RUN ollama start & \
+    sleep 5 && \
+    ollama run llama2:7b && \
+    kill $(pgrep ollama)
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . /app
+
+EXPOSE 5000
+
+CMD ["sh", "-c", "ollama serve & uvicorn api.main:app --host 0.0.0.0 --port 5000 --reload"]
+
+
 
 
