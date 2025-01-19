@@ -62,7 +62,7 @@ docker build -t my-fastapi-app .
 ### Docker run
 
 ```bash
-docker run -p 8000:8000 my-fastapi-app
+docker run -p 5000:5000 my-fastapi-app
 ```
 
 ## Contributions
