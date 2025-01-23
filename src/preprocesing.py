@@ -1,33 +1,25 @@
-import os
-from langchain_community.document_loaders.csv_loader import CSVLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_community.output_parsers.rail_parser import GuardrailsOutputParser
+from read import get_data_cripto
+
+
+class Document:
+    def __init__(self, content, metadata=None):
+        self.page_content = content
+        self.metadata = metadata if metadata is not None else {}
 
 
 
-def load_data():
-    ruta = "./data/"
-    all_docs = []  # Initialize a list to hold all documents
-    for archivo in os.listdir(ruta):
-        if archivo.endswith(".csv"):
-            file_path = os.path.join(ruta, archivo)  # Construct the full file path
-            loader = CSVLoader(file_path=file_path)  # Use the full file path
-            data_csv = loader.load()
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=500)
-            docs = text_splitter.split_documents(data_csv)
-            all_docs.extend(docs)  # Add the split documents to the list
-    return docs
+def process_and_store_data(api_key, simbolos, vectorstore):
+    all_docs = []  # Inicializa una lista para almacenar todos los documentos
+    for simbolo in simbolos:
+        data = get_data_cripto(api_key, simbolo)
+        if data:  # Verifica que los datos no estén vacíos
+            # Crea un documento a partir de los datos
+            content = f"Símbolo: {data['simbolo']}, Precio: {data['precio']}, Volumen: {data['volumen']}, Market Cap: {data['market_cap']}, Total Supply: {data['total_supply']}"
+            all_docs.append(Document(content))  # Agrega el documento a la lista
 
-def create_vectorstore():
-    docs = load_data()
-    embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    vectorstore = Chroma.from_documents(
-        documents=docs,
-        embedding=embed_model,
-        persist_directory="./db/chroma_db_dir",
-        collection_name="stanford_report_data"
-    )
-    return vectorstore
+    if all_docs:  # Solo procesa si hay datos
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=500)
+        split_docs = text_splitter.split_documents(all_docs)  # Divide los documentos en fragmentos
+        vectorstore.add_documents(split_docs)  # Agrega los nuevos documentos al vectorstore
 

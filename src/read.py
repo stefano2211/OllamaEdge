@@ -1,35 +1,34 @@
 import requests
-import pandas as pd
-import os
+import json
+import time
 
-def json_to_csv(api_url, base_filename):
-    # Realiza la solicitud a la API
-    response = requests.get(api_url)
-    
-    # Verifica que la solicitud fue exitosa
-    if response.status_code == 200:
-        # Carga el JSON
-        data = response.json()
-        
-        # Convierte el JSON a un DataFrame de pandas
-        df = pd.DataFrame(data)
-        
-        # Verifica que el DataFrame tenga las columnas esperadas
-        if all(col in df.columns for col in ['id', 'temperature', 'timestamp']):
-            # Genera un nombre de archivo único
-            csv_filename = base_filename
-            counter = 1
-            
-            # Aumenta el nombre del archivo si ya existe
-            while os.path.exists(csv_filename):
-                csv_filename = f"{base_filename.rsplit('.', 1)[0]}_{counter}.csv"
-                counter += 1
-            
-            # Guarda el DataFrame como un archivo CSV
-            df.to_csv(csv_filename, index=False)
-            print(f"Datos guardados en {csv_filename}")
+def get_data_cripto(api_key, simbolo):
+    url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest'
+    parameters = {
+        'symbol': simbolo,
+        'convert': 'USD'
+    }
+    headers = {
+        'Accepts': 'application/json',
+        'X-CMC_PRO_API_KEY': api_key,
+    }
+
+    while True:
+        response = requests.get(url, headers=headers, params=parameters)
+        if response.status_code == 200:
+            datos = json.loads(response.text)
+            if simbolo in datos['data']:  # Verifica que el símbolo esté en los datos
+                resultado = {
+                    'simbolo': simbolo,
+                    'precio': datos['data'][simbolo]['quote']['USD']['price'],
+                    'volumen': datos['data'][simbolo]['quote']['USD']['volume_24h'],
+                    'market_cap': datos['data'][simbolo]['quote']['USD']['market_cap'],
+                    'total_supply': datos['data'][simbolo]['total_supply']
+                }
+                return resultado
+            else:
+                print(f"Símbolo {simbolo} no encontrado en los datos.")
+                return None
         else:
-            print("El JSON no contiene las columnas esperadas.")
-    else:
-        print(f"Error al realizar la solicitud: {response.status_code}")
-
+            print(f"Error en la solicitud: {response.status_code}. Reintentando en 5 segundos...")
+            time.sleep(5)  # Espera 5 segundos antes de reintentar
