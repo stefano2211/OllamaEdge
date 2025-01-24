@@ -61,7 +61,7 @@ def chat(msg):
     
     retriever=vectorstore.as_retriever(search_kwargs={'k': 3})
 
-    custom_prompt_template = """Usa la siguiente información para responder a la pregunta del usuario.
+    custom_prompt_template = """Usa la siguiente información almacenada para responder a la pregunta del usuario sobre btc y los archivos que esten en el retrival.
     Si no sabes la respuesta, simplemente di que no lo sabes, no intentes inventar una respuesta.
 
     Contexto: {context}
