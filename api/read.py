@@ -1,8 +1,9 @@
 import requests
 import json
 import time
+import httpx
 
-def get_data_cripto(api_key, simbolo):
+async def get_data_cripto(api_key, simbolo):
     url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest'
     parameters = {
         'symbol': simbolo,
@@ -13,11 +14,11 @@ def get_data_cripto(api_key, simbolo):
         'X-CMC_PRO_API_KEY': api_key,
     }
 
-    while True:
-        response = requests.get(url, headers=headers, params=parameters)
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers, params=parameters)
         if response.status_code == 200:
-            datos = json.loads(response.text)
-            if simbolo in datos['data']:  # Verifica que el símbolo esté en los datos
+            datos = response.json()
+            if simbolo in datos['data']:  # Check that the symbol is in the data
                 resultado = {
                     'simbolo': simbolo,
                     'precio': datos['data'][simbolo]['quote']['USD']['price'],
@@ -30,5 +31,5 @@ def get_data_cripto(api_key, simbolo):
                 print(f"Símbolo {simbolo} no encontrado en los datos.")
                 return None
         else:
-            print(f"Error en la solicitud: {response.status_code}. Reintentando en 5 segundos...")
-            time.sleep(5)  # Espera 5 segundos antes de reintentar
+            print(f"Error en la solicitud: {response.status_code}.")
+            return None
