@@ -8,14 +8,68 @@ import uvicorn
 from fastapi.responses import JSONResponse
 import asyncio
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from preprocesing import process_and_store_data
 from langchain_community.document_loaders import PyPDFLoader, CSVLoader
 import os
 from datetime import datetime
+import httpx
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 
 
 app = FastAPI()
+
+async def get_data_cripto(api_key, simbolo):
+    url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest'
+    parameters = {
+        'symbol': simbolo,
+        'convert': 'USD'
+    }
+    headers = {
+        'Accepts': 'application/json',
+        'X-CMC_PRO_API_KEY': api_key,
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers, params=parameters)
+        if response.status_code == 200:
+            datos = response.json()
+            if simbolo in datos['data']:  # Check that the symbol is in the data
+                resultado = {
+                    'simbolo': simbolo,
+                    'precio': datos['data'][simbolo]['quote']['USD']['price'],
+                    'volumen': datos['data'][simbolo]['quote']['USD']['volume_24h'],
+                    'market_cap': datos['data'][simbolo]['quote']['USD']['market_cap'],
+                    'total_supply': datos['data'][simbolo]['total_supply']
+                }
+                return resultado
+            else:
+                print(f"Símbolo {simbolo} no encontrado en los datos.")
+                return None
+        else:
+            print(f"Error en la solicitud: {response.status_code}.")
+            return None
+
+class Document:
+    def __init__(self, content, metadata=None):
+        self.page_content = content
+        self.metadata = metadata if metadata is not None else {}
+
+
+
+async def process_and_store_data(api_key, simbolos, vectorstore):
+    all_docs = []  # Initialize a list to store all documents
+    for simbolo in simbolos:
+        data = await get_data_cripto(api_key, simbolo)  # Ensure get_data_cripto is also async
+        if data:  # Check that data is not empty
+            # Create a document from the data
+            content = f"Símbolo: {data['simbolo']}, Precio: {data['precio']}, Volumen: {data['volumen']}, Market Cap: {data['market_cap']}, Total Supply: {data['total_supply']}"
+            all_docs.append(Document(content))  # Add the document to the list
+
+    if all_docs:  # Only process if there is data
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=500)
+        split_docs = text_splitter.split_documents(all_docs)  # Split the documents into chunks
+        vectorstore.add_documents(split_docs)  # Add the new documents to the vectorstore
+
 
 def process_file(filepath):
     loader = PyPDFLoader(file_path=filepath)  # Usar el archivo específico
@@ -127,6 +181,8 @@ async def upload_file(file: UploadFile = File(...)):
 async def quick_response(msg: str):
     result = chat(msg)
     return result
+
+#hablame del Proof-of-Work de Bitcoin: A Peer-to-Peer Electronic Cash System
 
 if __name__ == '__main__':
     uvicorn.run(app, host='127.0.0.1', port=8000)
