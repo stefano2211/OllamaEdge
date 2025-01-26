@@ -157,7 +157,7 @@ def chat(msg: str) -> str:
     Returns:
         str: La respuesta generada por el modelo.
     """
-    llm = Ollama(model="llama3.1:8b")
+    llm = Ollama(model="deepseek-r1:8b")
     embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
     vectorstore = Chroma(embedding_function=embed_model,
