@@ -12,13 +12,20 @@ from langchain_community.document_loaders import PyPDFLoader, CSVLoader
 import os
 from datetime import datetime
 import httpx
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-
-
 
 app = FastAPI()
 
-async def get_data_cripto(api_key, simbolo):
+async def get_data_cripto(api_key: str, simbolo: str) -> dict:
+    """
+    Obtiene datos de criptomonedas desde la API de CoinMarketCap.
+
+    Args:
+        api_key (str): La clave API para autenticar la solicitud.
+        simbolo (str): El símbolo de la criptomoneda a consultar.
+
+    Returns:
+        dict: Un diccionario con los datos de la criptomoneda, o None si no se encuentra.
+    """
     url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest'
     parameters = {
         'symbol': simbolo,
@@ -33,7 +40,7 @@ async def get_data_cripto(api_key, simbolo):
         response = await client.get(url, headers=headers, params=parameters)
         if response.status_code == 200:
             datos = response.json()
-            if simbolo in datos['data']:  # Check that the symbol is in the data
+            if simbolo in datos['data']:
                 resultado = {
                     'simbolo': simbolo,
                     'precio': datos['data'][simbolo]['quote']['USD']['price'],
@@ -50,35 +57,64 @@ async def get_data_cripto(api_key, simbolo):
             return None
 
 class Document:
-    def __init__(self, content, metadata=None):
+    def __init__(self, content: str, metadata: dict = None):
+        """
+        Inicializa un documento con contenido y metadatos.
+
+        Args:
+            content (str): El contenido del documento.
+            metadata (dict, optional): Metadatos asociados al documento. Por defecto es None.
+        """
         self.page_content = content
         self.metadata = metadata if metadata is not None else {}
 
+async def process_and_store_data(api_key: str, simbolos: list, vectorstore) -> None:
+    """
+    Procesa y almacena datos de criptomonedas en un vectorstore.
 
-
-async def process_and_store_data(api_key, simbolos, vectorstore):
-    all_docs = []  # Initialize a list to store all documents
+    Args:
+        api_key (str): La clave API para autenticar la solicitud.
+        simbolos (list): Lista de símbolos de criptomonedas a consultar.
+        vectorstore: El vectorstore donde se almacenarán los documentos.
+    """
+    all_docs = []
     for simbolo in simbolos:
-        data = await get_data_cripto(api_key, simbolo)  # Ensure get_data_cripto is also async
-        if data:  # Check that data is not empty
-            # Create a document from the data
+        data = await get_data_cripto(api_key, simbolo)
+        if data:
             content = f"Símbolo: {data['simbolo']}, Precio: {data['precio']}, Volumen: {data['volumen']}, Market Cap: {data['market_cap']}, Total Supply: {data['total_supply']}"
-            all_docs.append(Document(content))  # Add the document to the list
+            all_docs.append(Document(content))
 
-    if all_docs:  # Only process if there is data
+    if all_docs:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=500)
-        split_docs = text_splitter.split_documents(all_docs)  # Split the documents into chunks
-        vectorstore.add_documents(split_docs)  # Add the new documents to the vectorstore
+        split_docs = text_splitter.split_documents(all_docs)
+        vectorstore.add_documents(split_docs)
 
+def process_file(filepath: str) -> list:
+    """
+    Procesa un archivo PDF y devuelve los documentos extraídos.
 
-def process_file(filepath):
-    loader = PyPDFLoader(file_path=filepath)  # Usar el archivo específico
+    Args:
+        filepath (str): La ruta del archivo PDF a procesar.
+
+    Returns:
+        list: Lista de documentos extraídos del archivo.
+    """
+    loader = PyPDFLoader(file_path=filepath)
     data_csv = loader.load()
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=500)
     docs = text_splitter.split_documents(data_csv)
     return docs
 
-def create_vectorstore(filepath):
+def create_vectorstore(filepath: str):
+    """
+    Crea un vectorstore a partir de un archivo PDF.
+
+    Args:
+        filepath (str): La ruta del archivo PDF a procesar.
+
+    Returns:
+        vectorstore: El vectorstore creado a partir de los documentos extraídos.
+    """
     docs = process_file(filepath)
     embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = Chroma.from_documents(
@@ -89,8 +125,14 @@ def create_vectorstore(filepath):
     )
     return vectorstore
 
+async def fetch_and_store_btc_data(api_key: str, symbols: list) -> None:
+    """
+    Obtiene y almacena datos de Bitcoin de forma continua.
 
-async def fetch_and_store_btc_data(api_key, symbols):
+    Args:
+        api_key (str): La clave API para autenticar la solicitud.
+        symbols (list): Lista de símbolos de criptomonedas a consultar.
+    """
     print("Inicializando el almacenamiento de datos...")
     embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = Chroma(persist_directory="./db/chroma_db_dir", collection_name="crypto_data", embedding_function=embed_model)
@@ -98,14 +140,23 @@ async def fetch_and_store_btc_data(api_key, symbols):
     while True:
         try:
             print("Obteniendo datos de criptomonedas...")
-            await process_and_store_data(api_key, symbols, vectorstore)  # Await the call
+            await process_and_store_data(api_key, symbols, vectorstore)
             print("Datos procesados y almacenados. Esperando un minuto para la próxima actualización...")
             await asyncio.sleep(60)
         except Exception as e:
             print(f"Error al obtener o almacenar datos: {e}")
             await asyncio.sleep(60)
 
-def chat(msg):
+def chat(msg: str) -> str:
+    """
+    Genera una respuesta a un mensaje utilizando un modelo de lenguaje y un vectorstore.
+
+    Args:
+        msg (str): El mensaje del usuario.
+
+    Returns:
+        str: La respuesta generada por el modelo.
+    """
     llm = Ollama(model="llama2:7b")
     embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
@@ -113,7 +164,7 @@ def chat(msg):
                      persist_directory="./db/chroma_db_dir",
                      collection_name="crypto_data")
     
-    retriever=vectorstore.as_retriever(search_kwargs={'k': 3})
+    retriever = vectorstore.as_retriever(search_kwargs={'k': 3})
 
     custom_prompt_template = """Usa la siguiente información almacenada para responder a la pregunta del usuario sobre btc y los archivos que esten en el retrival.
     Si no sabes la respuesta, simplemente di que no lo sabes, no intentes inventar una respuesta.
@@ -138,35 +189,41 @@ def chat(msg):
 
 @app.on_event("startup")
 async def startup_event():
+    """
+    Evento de inicio de la aplicación. Inicia la tarea de obtención y almacenamiento de datos de Bitcoin.
+    """
     api_key = ""  # Reemplaza con tu clave API real
     symbols = ["BTC"]  # Reemplaza con tus símbolos reales
     task = asyncio.create_task(fetch_and_store_btc_data(api_key, symbols))
 
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
-    # Verificar si el archivo subido es un PDF
+    """
+    Endpoint para subir un archivo PDF.
+
+    Args:
+        file (UploadFile): El archivo PDF a subir.
+
+    Returns:
+        dict: Información sobre el archivo subido.
+    """
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="¡Por favor, sube un archivo PDF!")
 
-    # Sanitizar el nombre del archivo
     safe_filename = os.path.basename(file.filename)
     file_location = f"./data/{safe_filename}"
 
-    # Crear el directorio si no existe
     os.makedirs(os.path.dirname(file_location), exist_ok=True)
 
     try:
-        # Escribir el archivo en la ubicación especificada
         with open(file_location, "wb") as f:
             content = await file.read()
             f.write(content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ocurrió un error al guardar el archivo: {str(e)}")
 
-    # Obtener la fecha y hora actual
     upload_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Llamar a create_vectorstore con el file_location
     create_vectorstore(file_location)
 
     return {
@@ -174,15 +231,22 @@ async def upload_file(file: UploadFile = File(...)):
         "Content-Type": file.content_type,
         "file_location": file_location,
         "file_size": f"{file.size / 1_048_576:.2f} MB",
-        "upload_time": upload_time,  # Fecha y hora de la subida
+        "upload_time": upload_time,
     }
     
 @app.post("/chat/")
 async def quick_response(msg: str):
+    """
+    Endpoint para generar una respuesta a un mensaje.
+
+    Args:
+        msg (str): El mensaje del usuario.
+
+    Returns:
+        str: La respuesta generada.
+    """
     result = chat(msg)
     return result
-
-#hablame del Proof-of-Work de Bitcoin: A Peer-to-Peer Electronic Cash System
 
 if __name__ == '__main__':
     uvicorn.run(app, host='127.0.0.1', port=8000)
