@@ -157,7 +157,7 @@ def chat(msg: str) -> str:
     Returns:
         str: La respuesta generada por el modelo.
     """
-    llm = Ollama(model="llama2:7b")
+    llm = Ollama(model="llama3.1:8b")
     embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
     vectorstore = Chroma(embedding_function=embed_model,
@@ -192,7 +192,7 @@ async def startup_event():
     """
     Evento de inicio de la aplicación. Inicia la tarea de obtención y almacenamiento de datos de Bitcoin.
     """
-    api_key = ""  # Reemplaza con tu clave API real
+    api_key = "4f8debb2-d650-4186-96ad-a5d73d0576ef"  # Reemplaza con tu clave API real
     symbols = ["BTC"]  # Reemplaza con tus símbolos reales
     task = asyncio.create_task(fetch_and_store_btc_data(api_key, symbols))
 
