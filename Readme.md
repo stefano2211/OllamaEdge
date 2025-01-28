@@ -12,47 +12,6 @@ This is a prototype of an edge cloud system specializing in AI, designed to empo
 
 
 
-## Set up the environment
-
-
-1. Create the virtual environment:
-```bash
-python3 -m venv venv
-```
-2. Activate the virtual environment:
-
-- For Linux/MacOS:
-```bash
-source venv/bin/activate
-```
-- For Command Prompt:
-```bash
-.\venv\Scripts\activate
-```
-3. Install dependencies:
-- To install all dependencies, run:
-```bash
-pip install -r requirements-dev.txt
-```
-- To install only production dependencies, run:
-```bash
-pip install -r requirements.txt
-```
-- To install a new package, run:
-```bash
-pip install <package-name>
-```
-## Install Ollama
-```bash
-Ollama run llama2:7b
-```
-
-## Run API 
-
-```bash
-uvicorn api.main:app
-```
-
 ## Docker Install
 
 ```bash
