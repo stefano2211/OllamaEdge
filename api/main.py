@@ -12,6 +12,7 @@ from langchain_community.document_loaders import PyPDFLoader, CSVLoader
 import os
 from datetime import datetime
 import httpx
+from langchain.memory import ConversationBufferMemory
 
 app = FastAPI()
 
@@ -166,23 +167,39 @@ def chat(msg: str) -> str:
     
     retriever = vectorstore.as_retriever(search_kwargs={'k': 3})
 
-    custom_prompt_template = """Usa la siguiente información almacenada para responder a la pregunta del usuario sobre btc y los archivos que esten en el retrival.
+
+    template = """
+    Use the following context (delimited by <ctx></ctx>) and the chat history (delimited by <hs></hs>) to answer the question:
+    Usa la siguiente información almacenada para responder a la pregunta del usuario sobre btc y los archivos que esten en el retrival.
     Si no sabes la respuesta, simplemente di que no lo sabes, no intentes inventar una respuesta.
-
-    Contexto: {context}
-    Pregunta: {question}
-
-    Solo devuelve la respuesta útil a continuación y nada más y responde siempre en español
-    Respuesta útil:
+    ------
+    <ctx>
+    {context}
+    </ctx>
+    ------
+    <hs>
+    {history}
+    </hs>
+    ------
+    {question}
+    Answer:
     """
-    prompt = PromptTemplate(template=custom_prompt_template,
-                            input_variables=['context', 'question'])
+    prompt = PromptTemplate(template=template,
+                            input_variables=['history','context', 'question'])
     
-    qa = RetrievalQA.from_chain_type(llm=llm,
-                                 chain_type="stuff",
-                                 retriever=retriever,
-                                 return_source_documents=True,
-                                 chain_type_kwargs={"prompt": prompt})
+    qa = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type='stuff',
+        retriever=retriever,
+        verbose=True,
+        chain_type_kwargs={
+            "verbose": True,
+            "prompt": prompt,
+            "memory": ConversationBufferMemory(
+                memory_key="history",
+                input_key="question"),
+        }
+    )
     
     response = qa.invoke({"query": msg})
     return response['result']
