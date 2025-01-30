@@ -13,6 +13,8 @@ import os
 from datetime import datetime
 import httpx
 from langchain.memory import ConversationBufferMemory
+from pydantic import BaseModel
+
 
 app = FastAPI()
 
@@ -168,38 +170,23 @@ def chat(msg: str) -> str:
     retriever = vectorstore.as_retriever(search_kwargs={'k': 3})
 
 
-    template = """
-    Use the following context (delimited by <ctx></ctx>) and the chat history (delimited by <hs></hs>) to answer the question:
-    Usa la siguiente información almacenada para responder a la pregunta del usuario sobre btc y los archivos que esten en el retrival.
-    Si no sabes la respuesta, simplemente di que no lo sabes, no intentes inventar una respuesta.
-    ------
-    <ctx>
-    {context}
-    </ctx>
-    ------
-    <hs>
-    {history}
-    </hs>
-    ------
-    {question}
-    Answer:
+    custom_prompt_template = """Quiero que seas bastante flexible a la hora de responder prenguntas si te llegan a preguntar algo relacionado a los
+    que tienes en el retrival respondes pero si no responde con una respuesta que no tenga relación con el retrival
+
+    Contexto: {context}
+    Pregunta: {question}
+
+    Responde siempre en español
+    Respuesta:
     """
-    prompt = PromptTemplate(template=template,
-                            input_variables=['history','context', 'question'])
+    prompt = PromptTemplate(template=custom_prompt_template,
+                            input_variables=['context', 'question'])
     
-    qa = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type='stuff',
-        retriever=retriever,
-        verbose=True,
-        chain_type_kwargs={
-            "verbose": True,
-            "prompt": prompt,
-            "memory": ConversationBufferMemory(
-                memory_key="history",
-                input_key="question"),
-        }
-    )
+    qa = RetrievalQA.from_chain_type(llm=llm,
+                                 chain_type="stuff",
+                                 retriever=retriever,
+                                 return_source_documents=True,
+                                 chain_type_kwargs={"prompt": prompt})
     
     response = qa.invoke({"query": msg})
     return response['result']
@@ -250,20 +237,26 @@ async def upload_file(file: UploadFile = File(...)):
         "file_size": f"{file.size / 1_048_576:.2f} MB",
         "upload_time": upload_time,
     }
+
+
+class ChatMessage(BaseModel):
+    msg: str
+
     
 @app.post("/chat/")
-async def quick_response(msg: str):
+async def quick_response(message: ChatMessage):
     """
     Endpoint para generar una respuesta a un mensaje.
 
     Args:
-        msg (str): El mensaje del usuario.
+        message (ChatMessage): El mensaje del usuario.
 
     Returns:
-        str: La respuesta generada.
+        dict: La respuesta generada.
     """
-    result = chat(msg)
-    return result
+    # Aquí va tu lógica para generar la respuesta
+    response = chat(message.msg)  # Asegúrate de que esta función esté definida
+    return {"response": response}
 
 if __name__ == '__main__':
     uvicorn.run(app, host='127.0.0.1', port=8000)
