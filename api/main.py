@@ -14,9 +14,14 @@ from datetime import datetime
 import httpx
 from langchain.memory import ConversationBufferMemory
 from pydantic import BaseModel
+from typing import List, Dict
+
+
 
 
 app = FastAPI()
+
+
 
 async def get_data_cripto(api_key: str, simbolo: str) -> dict:
     """
@@ -150,43 +155,61 @@ async def fetch_and_store_btc_data(api_key: str, symbols: list) -> None:
             print(f"Error al obtener o almacenar datos: {e}")
             await asyncio.sleep(60)
 
-def chat(msg: str) -> str:
+def chat(msg: str, reset: bool = False) -> str:
     """
     Genera una respuesta a un mensaje utilizando un modelo de lenguaje y un vectorstore.
+    Si reset es True, se borra el buffer de la conversación.
 
     Args:
         msg (str): El mensaje del usuario.
+        reset (bool): Si es True, se resetea la memoria de la conversación.
 
     Returns:
         str: La respuesta generada por el modelo.
     """
-    llm = Ollama(model="deepseek-r1:8b")
+    conversation_memory = ConversationBufferMemory(memory_key="history", input_key="question")
+
+    # Resetear la memoria si el usuario lo solicita
+    if reset:
+        conversation_memory.clear()
+        return "La conversación ha sido reseteada. ¿En qué puedo ayudarte?"
+
+    llm = Ollama(model="llama3.1:8b")
     embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-    vectorstore = Chroma(embedding_function=embed_model,
-                     persist_directory="./db/chroma_db_dir",
-                     collection_name="crypto_data")
+    vectorstore = Chroma(
+        embedding_function=embed_model,
+        persist_directory="./db/chroma_db_dir",
+        collection_name="crypto_data"
+    )
     
     retriever = vectorstore.as_retriever(search_kwargs={'k': 3})
 
-
-    custom_prompt_template = """Quiero que seas bastante flexible a la hora de responder prenguntas si te llegan a preguntar algo relacionado a los
-    que tienes en el retrival respondes pero si no responde con una respuesta que no tenga relación con el retrival
+    custom_prompt_template = """Quiero que seas bastante flexible a la hora de responder preguntas. Si te preguntan algo relacionado con lo que tienes en el retrieval, responde basado en eso. Si no, responde con una respuesta general.
 
     Contexto: {context}
+    Historial de conversación: {history}
     Pregunta: {question}
 
-    Responde siempre en español
+    Responde siempre en español.
     Respuesta:
     """
-    prompt = PromptTemplate(template=custom_prompt_template,
-                            input_variables=['context', 'question'])
+    prompt = PromptTemplate(
+        template=custom_prompt_template,
+        input_variables=['context', 'history', 'question']
+    )
     
-    qa = RetrievalQA.from_chain_type(llm=llm,
-                                 chain_type="stuff",
-                                 retriever=retriever,
-                                 return_source_documents=True,
-                                 chain_type_kwargs={"prompt": prompt})
+    qa = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type='stuff',
+        retriever=retriever,
+        verbose=True,
+        chain_type_kwargs={
+            "verbose": True,
+            "prompt": prompt,
+            "memory": conversation_memory,
+        }
+    )
     
     response = qa.invoke({"query": msg})
     return response['result']
@@ -241,12 +264,13 @@ async def upload_file(file: UploadFile = File(...)):
 
 class ChatMessage(BaseModel):
     msg: str
+    reset: bool = False  # Opción para resetear la conversación
 
-    
 @app.post("/chat/")
 async def quick_response(message: ChatMessage):
     """
     Endpoint para generar una respuesta a un mensaje.
+    Si reset es True, se borra el historial de la conversación.
 
     Args:
         message (ChatMessage): El mensaje del usuario.
@@ -254,8 +278,9 @@ async def quick_response(message: ChatMessage):
     Returns:
         dict: La respuesta generada.
     """
-    # Aquí va tu lógica para generar la respuesta
-    response = chat(message.msg)  # Asegúrate de que esta función esté definida
+    response = chat(message.msg, reset=message.reset)
+    
+    
     return {"response": response}
 
 if __name__ == '__main__':
