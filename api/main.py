@@ -5,7 +5,6 @@ from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 import uvicorn
-from fastapi.responses import JSONResponse
 import asyncio
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, CSVLoader
@@ -14,55 +13,32 @@ from datetime import datetime
 import httpx
 from langchain.memory import ConversationBufferMemory
 from pydantic import BaseModel
-from typing import List, Dict
-
-
+from typing import Literal
 
 
 app = FastAPI()
 
+weather_service_status = "apagado"
 
-
-async def get_data_cripto(api_key: str, simbolo: str) -> dict:
+async def get_weather_data(location: str = "Madrid") -> dict:
     """
-    Obtiene datos de criptomonedas desde la API de CoinMarketCap.
+    Obtiene datos del clima desde la API de wttr.in.
 
     Args:
-        api_key (str): La clave API para autenticar la solicitud.
-        simbolo (str): El símbolo de la criptomoneda a consultar.
+        location (str): Ubicación para la cual se obtendrá el clima. Por defecto es "Madrid".
 
     Returns:
-        dict: Un diccionario con los datos de la criptomoneda, o None si no se encuentra.
+        dict: Un diccionario con los datos del clima.
     """
-    url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest'
-    parameters = {
-        'symbol': simbolo,
-        'convert': 'USD'
-    }
-    headers = {
-        'Accepts': 'application/json',
-        'X-CMC_PRO_API_KEY': api_key,
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, headers=headers, params=parameters)
-        if response.status_code == 200:
-            datos = response.json()
-            if simbolo in datos['data']:
-                resultado = {
-                    'simbolo': simbolo,
-                    'precio': datos['data'][simbolo]['quote']['USD']['price'],
-                    'volumen': datos['data'][simbolo]['quote']['USD']['volume_24h'],
-                    'market_cap': datos['data'][simbolo]['quote']['USD']['market_cap'],
-                    'total_supply': datos['data'][simbolo]['total_supply']
-                }
-                return resultado
-            else:
-                print(f"Símbolo {simbolo} no encontrado en los datos.")
-                return None
-        else:
-            print(f"Error en la solicitud: {response.status_code}.")
-            return None
+    url = f"https://wttr.in/{location}?format=j1"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            weather_data = response.json()
+            return weather_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener datos del clima: {e}")
 
 class Document:
     def __init__(self, content: str, metadata: dict = None):
@@ -76,26 +52,43 @@ class Document:
         self.page_content = content
         self.metadata = metadata if metadata is not None else {}
 
-async def process_and_store_data(api_key: str, simbolos: list, vectorstore) -> None:
+def preprocess_weather_data(weather_data: dict) -> str:
     """
-    Procesa y almacena datos de criptomonedas en un vectorstore.
+    Preprocesa los datos del clima para convertirlos en un formato de texto.
 
     Args:
-        api_key (str): La clave API para autenticar la solicitud.
-        simbolos (list): Lista de símbolos de criptomonedas a consultar.
-        vectorstore: El vectorstore donde se almacenarán los documentos.
-    """
-    all_docs = []
-    for simbolo in simbolos:
-        data = await get_data_cripto(api_key, simbolo)
-        if data:
-            content = f"Símbolo: {data['simbolo']}, Precio: {data['precio']}, Volumen: {data['volumen']}, Market Cap: {data['market_cap']}, Total Supply: {data['total_supply']}"
-            all_docs.append(Document(content))
+        weather_data (dict): Datos del clima en formato JSON.
 
-    if all_docs:
+    Returns:
+        str: Texto preprocesado con los datos del clima.
+    """
+    current_condition = weather_data["current_condition"][0]
+    weather_text = (
+        f"Ubicación: {weather_data['nearest_area'][0]['areaName'][0]['value']}\n"
+        f"Temperatura: {current_condition['temp_C']}°C\n"
+        f"Condición: {current_condition['weatherDesc'][0]['value']}\n"
+        f"Humedad: {current_condition['humidity']}%\n"
+        f"Viento: {current_condition['windspeedKmph']} km/h\n"
+    )
+    return weather_text
+
+async def process_and_store_weather_data(vectorstore, location: str = "Madrid") -> None:
+    """
+    Procesa y almacena datos del clima en un vectorstore.
+
+    Args:
+        vectorstore: El vectorstore donde se almacenarán los documentos.
+        location (str): Ubicación para la cual se obtendrá el clima. Por defecto es "Madrid".
+    """
+    weather_data = await get_weather_data(location)
+    if weather_data:
+        weather_text = preprocess_weather_data(weather_data)
+        doc = Document(weather_text, metadata={"source": "wttr.in", "location": location})
+
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=500)
-        split_docs = text_splitter.split_documents(all_docs)
+        split_docs = text_splitter.split_documents([doc])
         vectorstore.add_documents(split_docs)
+
 
 def process_file(filepath: str) -> list:
     """
@@ -129,31 +122,9 @@ def create_vectorstore(filepath: str):
         documents=docs,
         embedding=embed_model,
         persist_directory="./db/chroma_db_dir",
-        collection_name="crypto_data"
+        collection_name="weather_data"
     )
     return vectorstore
-
-async def fetch_and_store_btc_data(api_key: str, symbols: list) -> None:
-    """
-    Obtiene y almacena datos de Bitcoin de forma continua.
-
-    Args:
-        api_key (str): La clave API para autenticar la solicitud.
-        symbols (list): Lista de símbolos de criptomonedas a consultar.
-    """
-    print("Inicializando el almacenamiento de datos...")
-    embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    vectorstore = Chroma(persist_directory="./db/chroma_db_dir", collection_name="crypto_data", embedding_function=embed_model)
-
-    while True:
-        try:
-            print("Obteniendo datos de criptomonedas...")
-            await process_and_store_data(api_key, symbols, vectorstore)
-            print("Datos procesados y almacenados. Esperando un minuto para la próxima actualización...")
-            await asyncio.sleep(60)
-        except Exception as e:
-            print(f"Error al obtener o almacenar datos: {e}")
-            await asyncio.sleep(60)
 
 def chat(msg: str, reset: bool = False) -> str:
     """
@@ -180,7 +151,7 @@ def chat(msg: str, reset: bool = False) -> str:
     vectorstore = Chroma(
         embedding_function=embed_model,
         persist_directory="./db/chroma_db_dir",
-        collection_name="crypto_data"
+        collection_name="weather_data"
     )
     
     retriever = vectorstore.as_retriever(search_kwargs={'k': 3})
@@ -214,14 +185,36 @@ def chat(msg: str, reset: bool = False) -> str:
     response = qa.invoke({"query": msg})
     return response['result']
 
-@app.on_event("startup")
-async def startup_event():
+class WeatherControl(BaseModel):
+    status: Literal["prendido", "apagado"]
+    location: str = "Madrid"  # Ubicación por defecto
+
+@app.post("/weather/")
+async def control_weather_service(control: WeatherControl):
     """
-    Evento de inicio de la aplicación. Inicia la tarea de obtención y almacenamiento de datos de Bitcoin.
+    Endpoint para controlar el servicio de obtención de datos del clima.
+
+    Args:
+        control (WeatherControl): Objeto con el estado del servicio ("prendido" o "apagado") y la ubicación.
+
+    Returns:
+        dict: Mensaje de confirmación del estado del servicio.
     """
-    api_key = "4f8debb2-d650-4186-96ad-a5d73d0576ef"  # Reemplaza con tu clave API real
-    symbols = ["BTC"]  # Reemplaza con tus símbolos reales
-    task = asyncio.create_task(fetch_and_store_btc_data(api_key, symbols))
+    global weather_service_status
+    weather_service_status = control.status
+
+    embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    vectorstore = Chroma(persist_directory="./db/chroma_db_dir", collection_name="weather_data", embedding_function=embed_model)
+
+    if control.status == "prendido":
+        return {"message": "El servicio está prendido. Último dato ya fue almacenado."}
+    else:
+        await process_and_store_weather_data(vectorstore, control.location)
+        return {"message": "Datos del clima obtenidos y almacenados correctamente."}
+    
+
+    
+
 
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
