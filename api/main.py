@@ -22,7 +22,7 @@ weather_service_status = "apagado"
 
 async def get_weather_data(location: str = "Madrid") -> dict:
     """
-    Obtiene datos del clima desde la API de wttr.in.
+    Obtiene datos del clima desde la API de wttr.
 
     Args:
         location (str): Ubicación para la cual se obtendrá el clima. Por defecto es "Madrid".
