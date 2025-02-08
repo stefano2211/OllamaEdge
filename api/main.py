@@ -7,6 +7,7 @@ from langchain_ollama import OllamaEmbeddings
 from src.get_data import process_and_store_weather_data
 from src.upload_files import create_vectorstore
 from src.chat import chat
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 import uvicorn
 import os
 
@@ -37,7 +38,7 @@ async def control_weather_service(control: WeatherControl):
     global weather_service_status
     weather_service_status = control.status
 
-    embed_model = OllamaEmbeddings(model="llama3.1:8b")
+    embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = Chroma(persist_directory="./db/chroma_db_dir", collection_name="weather_data", embedding_function=embed_model)
 
     if control.status == "prendido":

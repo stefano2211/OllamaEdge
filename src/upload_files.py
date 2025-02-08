@@ -2,7 +2,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import Chroma
 from langchain_ollama import OllamaEmbeddings
-
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
 def process_file(filepath: str) -> list:
     """
@@ -33,7 +33,7 @@ def create_vectorstore(filepath: str):
     # Autenticación en Hugging Face
 
     docs = process_file(filepath)
-    embed_model = OllamaEmbeddings(model="llama3.1:8b")
+    embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = Chroma.from_documents(
         documents=docs,
         embedding=embed_model,

@@ -3,6 +3,7 @@ from langchain_ollama import OllamaEmbeddings
 from langchain.memory import ConversationBufferMemory
 from langchain_community.vectorstores import Chroma
 from langchain.prompts import PromptTemplate
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain.chains import RetrievalQA
 
 
@@ -26,7 +27,7 @@ def chat(msg: str, reset: bool = False) -> str:
         return "La conversación ha sido reseteada. ¿En qué puedo ayudarte?"
 
     llm = Ollama(model="llama3.1:8b")
-    embed_model = OllamaEmbeddings(model="llama3.1:8b")
+    embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
     vectorstore = Chroma(
         embedding_function=embed_model,

@@ -57,6 +57,7 @@ def preprocess_weather_data(weather_data: dict) -> str:
         f"Condición: {current_condition['weatherDesc'][0]['value']}\n"
         f"Humedad: {current_condition['humidity']}%\n"
         f"Viento: {current_condition['windspeedKmph']} km/h\n"
+        f"Date: {current_condition['localObsDateTime']}"
     )
     return weather_text
 
