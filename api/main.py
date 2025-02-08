@@ -39,12 +39,16 @@ async def control_weather_service(control: WeatherControl):
     weather_service_status = control.status
 
     embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    vectorstore = Chroma(persist_directory="./db/chroma_db_dir", collection_name="weather_data", embedding_function=embed_model)
+    vectorstore_weather = Chroma(
+        embedding_function=embed_model,
+        persist_directory="./db/weather_db",
+        collection_name="weather_data"
+    )
 
     if control.status == "prendido":
         return {"message": "El servicio está prendido. Último dato ya fue almacenado."}
     else:
-        await process_and_store_weather_data(vectorstore, control.location)
+        await process_and_store_weather_data(vectorstore_weather, control.location)
         return {"message": "Datos del clima obtenidos y almacenados correctamente."}
     
 @app.post("/upload/")

@@ -34,10 +34,10 @@ def create_vectorstore(filepath: str):
 
     docs = process_file(filepath)
     embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    vectorstore = Chroma.from_documents(
+    vectorstore_files = Chroma.from_documents(
         documents=docs,
         embedding=embed_model,
-        persist_directory="./db/chroma_db_dir",
-        collection_name="weather_data"
+        persist_directory="./db/pdf_db",
+        collection_name="pdf_data"
     )
-    return vectorstore
+    return vectorstore_files
