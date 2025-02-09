@@ -26,6 +26,7 @@ class ChatMessage(BaseModel):
 
 class DeletePDFRequest(BaseModel):
     filename: str
+    
 
 @app.post("/weather/")
 async def control_weather_service(control: WeatherControl):
