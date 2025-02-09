@@ -6,6 +6,8 @@ import re
 import os
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
+
+
 def process_file(filepath: str) -> list:
     """
     Procesa un archivo PDF y devuelve los documentos extraídos.
