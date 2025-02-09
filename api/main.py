@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Literal
 from langchain_ollama import OllamaEmbeddings
 from src.get_data import process_and_store_weather_data
-from src.upload_files import create_vectorstore
+from src.upload_files import create_vectorstore, sanitize_filename, delete_pdf_from_retriever, delete_pdf_file
 from src.chat import chat
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 import uvicorn
@@ -23,6 +23,9 @@ class WeatherControl(BaseModel):
 class ChatMessage(BaseModel):
     msg: str
     reset: bool = False  # Opción para resetear la conversación
+
+class DeletePDFRequest(BaseModel):
+    filename: str
 
 @app.post("/weather/")
 async def control_weather_service(control: WeatherControl):
@@ -105,6 +108,27 @@ async def quick_response(message: ChatMessage):
     
     
     return {"response": response}
+
+@app.post("/delete-pdf/")
+async def delete_pdf(request: DeletePDFRequest):
+    """
+    Endpoint para borrar un archivo PDF del retriever y del servidor.
+    """
+    filename = sanitize_filename(request.filename)
+    
+    try:
+        # Borrar los embeddings del vectorstore
+        delete_pdf_from_retriever(filename)
+        
+        # Borrar el archivo físico del servidor
+        delete_pdf_file(filename)
+        
+        return {"message": f"El archivo '{filename}' ha sido borrado correctamente."}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al borrar el archivo: {str(e)}")
+
 
 if __name__ == '__main__':
     uvicorn.run(app, host='127.0.0.1', port=8000)

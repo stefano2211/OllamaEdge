@@ -1,7 +1,9 @@
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import Chroma
-from langchain_ollama import OllamaEmbeddings
+from fastapi import HTTPException
+import re
+import os
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
 def process_file(filepath: str) -> list:
@@ -41,3 +43,48 @@ def create_vectorstore(filepath: str):
         collection_name="pdf_data"
     )
     return vectorstore_files
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitiza el nombre del archivo para evitar inyección de rutas.
+    """
+    return re.sub(r"[^a-zA-Z0-9_.-]", "", filename)
+
+def delete_pdf_file(filename: str):
+    """
+    Borra el archivo PDF físico del servidor.
+    """
+    file_location = f"./data/{filename}"
+    if os.path.exists(file_location):
+        os.remove(file_location)
+    else:
+        raise HTTPException(status_code=404, detail=f"El archivo '{filename}' no existe en el servidor.")
+
+def delete_pdf_from_retriever(filename: str):
+    """
+    Borra todos los documentos asociados a un archivo PDF del vectorstore.
+    """
+    try:
+        # Inicializar el vectorstore (si no está inicializado globalmente)
+        embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        vectorstore_files = Chroma(
+            embedding_function=embed_model,
+            persist_directory="./db/pdf_db",
+            collection_name="pdf_data"
+        )
+        
+        # Acceder a la colección de Chroma
+        collection = vectorstore_files._collection
+        
+        # Eliminar documentos basados en los metadatos
+        collection.delete(where={"filename": filename})
+        
+        # Opcional: Verificar si los documentos fueron eliminados
+        remaining_docs = collection.get(where={"filename": filename})
+        if remaining_docs.get("ids"):  # Verificar si hay documentos restantes
+            raise HTTPException(status_code=500, detail=f"No se pudieron eliminar todos los documentos asociados a '{filename}'.")
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al borrar los embeddings: {str(e)}")
